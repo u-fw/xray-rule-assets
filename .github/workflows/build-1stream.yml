@@ -31,6 +31,7 @@ jobs:
           {
             echo "WORKDIR=$RUNNER_TEMP/1stream-geosite"
             echo "DATADIR=$RUNNER_TEMP/1stream-geosite/data"
+            echo "METADIR=$RUNNER_TEMP/1stream-geosite/meta"
             echo "DLC_DIR=$RUNNER_TEMP/1stream-geosite/domain-list-community"
             echo "ASSET_DIR=$GITHUB_WORKSPACE/dist"
             echo "OUT_DAT=$GITHUB_WORKSPACE/dist/1stream.dat"
@@ -81,10 +82,10 @@ jobs:
             echo '```'
             echo
             echo "## Category Tags"
-            find "$DATADIR" -maxdepth 1 -type f -printf '%f\n' | sort | awk '!/-/ { print "- ext:1stream.dat:" $0 }'
+            sed 's#^#- ext:1stream.dat:#' "$METADIR/categories"
             echo
             echo "## Category-Service Tags"
-            find "$DATADIR" -maxdepth 1 -type f -printf '%f\n' | sort | awk '/-/ { print "- ext:1stream.dat:" $0 }'
+            sed 's#^#- ext:1stream.dat:#' "$METADIR/services"
           } > dist/1stream-tags.md
 
           STREAM_SHA256="${{ steps.upstream.outputs.stream_sha256 }}"

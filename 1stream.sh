@@ -38,6 +38,7 @@ set -Eeuo pipefail
 
 WORKDIR="${WORKDIR:-/opt/1stream-geosite}"
 DATADIR="${DATADIR:-$WORKDIR/data}"
+METADIR="${METADIR:-$WORKDIR/meta}"
 DLC_DIR="${DLC_DIR:-$WORKDIR/domain-list-community}"
 
 ASSET_DIR="${ASSET_DIR:-/usr/local/share/xray}"
@@ -197,6 +198,7 @@ ensure_base_commands() {
   info "Log file: $LOG_FILE"
   info "Workdir: $WORKDIR"
   info "Data dir: $DATADIR"
+  info "Meta dir: $METADIR"
   info "Output dat: $OUT_DAT"
   info "Xray config: $XRAY_CONFIG"
 
@@ -388,7 +390,9 @@ parse_1stream() {
 
   info "Cleaning old data directory: $DATADIR"
   safe_rm_dir "$DATADIR"
-  mkdir -p "$DATADIR"
+  info "Cleaning old metadata directory: $METADIR"
+  safe_rm_dir "$METADIR"
+  mkdir -p "$DATADIR" "$METADIR"
 
   TMP_PY="$(mktemp)"
 
@@ -400,7 +404,9 @@ from collections import defaultdict
 
 raw_file = Path(sys.argv[1])
 data_dir = Path(sys.argv[2])
+meta_dir = Path(sys.argv[3])
 data_dir.mkdir(parents=True, exist_ok=True)
+meta_dir.mkdir(parents=True, exist_ok=True)
 
 def slugify(name: str) -> str:
     name = name.strip().lower()
@@ -431,6 +437,8 @@ current_category = None
 current_service = None
 
 groups = defaultdict(set)
+categories = set()
+services = set()
 
 for line in raw_file.read_text(encoding="utf-8", errors="ignore").splitlines():
     line = line.strip()
@@ -441,6 +449,7 @@ for line in raw_file.read_text(encoding="utf-8", errors="ignore").splitlines():
     if cat:
         current_category = slugify(cat.group(1))
         current_category = category_alias.get(current_category, current_category)
+        categories.add(current_category)
         current_service = None
         continue
 
@@ -475,7 +484,9 @@ for line in raw_file.read_text(encoding="utf-8", errors="ignore").splitlines():
     #      global-platform-netflix
     #      taiwan-media-bahamut-anime
     if current_category and current_service:
-        groups[f"{current_category}-{current_service}"].add(rule)
+        service_tag = f"{current_category}-{current_service}"
+        groups[service_tag].add(rule)
+        services.add(service_tag)
 
 for name, rules in sorted(groups.items()):
     if not rules:
@@ -489,12 +500,21 @@ for name, rules in sorted(groups.items()):
 print("Generated tags:")
 for name in sorted(groups):
     print(f"  {name}: {len(groups[name])}")
+
+(meta_dir / "categories").write_text(
+    "\n".join(name for name in sorted(categories) if name in groups) + "\n",
+    encoding="utf-8",
+)
+(meta_dir / "services").write_text(
+    "\n".join(name for name in sorted(services) if name in groups) + "\n",
+    encoding="utf-8",
+)
 PY
 
-  python3 "$TMP_PY" "$TMP_RAW" "$DATADIR"
+  python3 "$TMP_PY" "$TMP_RAW" "$DATADIR" "$METADIR"
 
   info "Generated clean data directory: $DATADIR"
-  info "Generated tag count: $(find "$DATADIR" -type f | wc -l)"
+  info "Generated tag count: $(find "$DATADIR" -maxdepth 1 -type f | wc -l)"
 }
 
 # ======================
