@@ -1,0 +1,129 @@
+name: Build 1stream.dat
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-1stream-dat
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      STREAM_URL: https://raw.githubusercontent.com/1-stream/1stream-public-utils/main/stream.xray.list
+      WORKDIR: ${{ runner.temp }}/1stream-geosite
+      DATADIR: ${{ runner.temp }}/1stream-geosite/data
+      DLC_DIR: ${{ runner.temp }}/1stream-geosite/domain-list-community
+      ASSET_DIR: ${{ github.workspace }}/dist
+      OUT_DAT: ${{ github.workspace }}/dist/1stream.dat
+      BACKUP_DAT: ${{ github.workspace }}/dist/1stream.dat.bak
+      LOG_FILE: ${{ runner.temp }}/1stream-dat-update.log
+      REQUIRE_XRAY_TEST: "0"
+      RESTART_XRAY: "0"
+      GOPROXY: https://proxy.golang.org,direct
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Record upstream versions
+        id: upstream
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          STREAM_SHA256="$(curl -fsSL "$STREAM_URL" | sha256sum | awk '{print $1}')"
+          DLC_HEAD="$(git ls-remote https://github.com/v2fly/domain-list-community.git HEAD | awk '{print $1}')"
+
+          echo "stream_sha256=$STREAM_SHA256" >> "$GITHUB_OUTPUT"
+          echo "domain_list_community_commit=$DLC_HEAD" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+          cache: false
+
+      - name: Build dat
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$ASSET_DIR"
+          bash ./1stream.sh
+
+      - name: Write checksum and source info
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          cd "$GITHUB_WORKSPACE"
+          sha256sum dist/1stream.dat | tee dist/1stream.dat.sha256
+
+          {
+            echo "# 1stream.dat generated tags"
+            echo
+            echo "Use these tags in Xray domain rules as:"
+            echo
+            echo '```json'
+            echo '"domain": ["ext:1stream.dat:<tag>"]'
+            echo '```'
+            echo
+            echo "## Category Tags"
+            find "$DATADIR" -maxdepth 1 -type f -printf '%f\n' | sort | awk '!/-/ { print "- ext:1stream.dat:" $0 }'
+            echo
+            echo "## Category-Service Tags"
+            find "$DATADIR" -maxdepth 1 -type f -printf '%f\n' | sort | awk '/-/ { print "- ext:1stream.dat:" $0 }'
+          } > dist/1stream-tags.md
+
+          STREAM_SHA256="${{ steps.upstream.outputs.stream_sha256 }}"
+          DLC_COMMIT="${{ steps.upstream.outputs.domain_list_community_commit }}"
+          DAT_SHA256="$(awk '{print $1}' dist/1stream.dat.sha256)"
+          BUILT_AT="$(date -u +%FT%TZ)"
+
+          cat > dist/source-info.json <<EOF
+          {
+            "built_at": "$BUILT_AT",
+            "stream_url": "$STREAM_URL",
+            "stream_sha256": "$STREAM_SHA256",
+            "domain_list_community_commit": "$DLC_COMMIT",
+            "tag_count": $(find "$DATADIR" -maxdepth 1 -type f | wc -l),
+            "dat_sha256": "$DAT_SHA256",
+            "workflow_sha": "$GITHUB_SHA"
+          }
+          EOF
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 1stream-geosite-dat
+          if-no-files-found: error
+          path: |
+            dist/1stream.dat
+            dist/1stream.dat.sha256
+            dist/1stream-tags.md
+            dist/source-info.json
+
+      - name: Publish latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: 1stream-latest
+          name: Latest 1stream.dat
+          body: |
+            Automated build of `1stream.dat` for Xray `domain` rules.
+
+            This is a geosite/domain asset only. It does not include geoip data.
+
+            Download `1stream-tags.md` from this release to see all generated tags and copy-ready `ext:1stream.dat:<tag>` references.
+
+            This workflow only runs when manually triggered from GitHub Actions.
+          files: |
+            dist/1stream.dat
+            dist/1stream.dat.sha256
+            dist/1stream-tags.md
+            dist/source-info.json
+          make_latest: true
+          overwrite_files: true
