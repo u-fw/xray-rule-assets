@@ -15,13 +15,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       STREAM_URL: https://raw.githubusercontent.com/1-stream/1stream-public-utils/main/stream.xray.list
-      WORKDIR: ${{ runner.temp }}/1stream-geosite
-      DATADIR: ${{ runner.temp }}/1stream-geosite/data
-      DLC_DIR: ${{ runner.temp }}/1stream-geosite/domain-list-community
-      ASSET_DIR: ${{ github.workspace }}/dist
-      OUT_DAT: ${{ github.workspace }}/dist/1stream.dat
-      BACKUP_DAT: ${{ github.workspace }}/dist/1stream.dat.bak
-      LOG_FILE: ${{ runner.temp }}/1stream-dat-update.log
       REQUIRE_XRAY_TEST: "0"
       RESTART_XRAY: "0"
       GOPROXY: https://proxy.golang.org,direct
@@ -29,6 +22,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Configure build paths
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          {
+            echo "WORKDIR=$RUNNER_TEMP/1stream-geosite"
+            echo "DATADIR=$RUNNER_TEMP/1stream-geosite/data"
+            echo "DLC_DIR=$RUNNER_TEMP/1stream-geosite/domain-list-community"
+            echo "ASSET_DIR=$GITHUB_WORKSPACE/dist"
+            echo "OUT_DAT=$GITHUB_WORKSPACE/dist/1stream.dat"
+            echo "BACKUP_DAT=$GITHUB_WORKSPACE/dist/1stream.dat.bak"
+            echo "LOG_FILE=$RUNNER_TEMP/1stream-dat-update.log"
+          } >> "$GITHUB_ENV"
 
       - name: Record upstream versions
         id: upstream

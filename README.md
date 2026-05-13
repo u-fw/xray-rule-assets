@@ -36,3 +36,8 @@ Example routing rule:
 ```
 
 Download `1stream-tags.md` from the release to see all generated tags.
+
+## Scripts
+
+- `1stream.sh`: build `1stream.dat` from 1stream upstream domain rules.
+- `freedom.sh`: VLESS + REALITY deployment helper for Xray-core or sing-box.
