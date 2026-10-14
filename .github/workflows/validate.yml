@@ -1,0 +1,27 @@
+name: Source validation
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - main
+    paths: &a1
+      - "*.sh"
+      - .github/workflows/**
+  pull_request:
+    paths: *a1
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Parse asset and installation scripts without network or system changes
+        run: |
+          for script in 1stream.sh freedom.sh; do bash -n "$script"; done

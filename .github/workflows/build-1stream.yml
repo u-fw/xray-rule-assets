@@ -118,6 +118,7 @@ jobs:
             dist/1stream.dat.sha256
             dist/1stream-tags.md
             dist/source-info.json
+          retention-days: 7
 
       - name: Publish latest release
         uses: softprops/action-gh-release@v2
@@ -139,3 +140,4 @@ jobs:
             dist/source-info.json
           make_latest: true
           overwrite_files: true
+    timeout-minutes: 30
